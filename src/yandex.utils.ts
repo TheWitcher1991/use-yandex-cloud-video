@@ -23,3 +23,15 @@ export const loadAsyncDynamicScript = async ({
 		document.body.appendChild(script)
 	})
 }
+
+export const YANDEX_CLOUD_VIDEO_START_STATE: YandexCloudVideo.PlayerSdkState = {
+	currentTime: 0,
+	duration: 0,
+	error: null,
+	muted: false,
+	source: null,
+	status: null,
+	utcStartTime: null,
+	videoType: null,
+	volume: 0,
+}

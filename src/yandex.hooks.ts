@@ -1,5 +1,6 @@
 import { RefObject, useCallback, useEffect, useState } from 'react'
 import { useYandexCloudVideoSdk } from './yandex.context.tsx'
+import { YANDEX_CLOUD_VIDEO_START_STATE } from '~yandex.utils.ts'
 
 export type UseYandexCloudVideoPlayer = YandexCloudVideo.PlayerSdkInitConfig & {
 	ref: RefObject<HTMLDivElement>
@@ -21,17 +22,9 @@ export const useYandexCloudVideoPlayer = ({
 	const [player, setPlayer] =
 		useState<YandexCloudVideo.Nullable<YandexCloudVideo.PlayerSdkApi>>(null)
 
-	const [state, setState] = useState<YandexCloudVideo.PlayerSdkState>({
-		currentTime: 0,
-		duration: 0,
-		error: null,
-		muted: false,
-		source: null,
-		status: null,
-		utcStartTime: null,
-		videoType: null,
-		volume: 0,
-	})
+	const [state, setState] = useState<YandexCloudVideo.PlayerSdkState>(
+		YANDEX_CLOUD_VIDEO_START_STATE,
+	)
 
 	useEffect(() => {
 		setElement(ref.current)
@@ -71,6 +64,7 @@ export const useYandexCloudVideoPlayer = ({
 			instance.on('StatusChange', updateState)
 
 			setPlayer(null)
+			setState(YANDEX_CLOUD_VIDEO_START_STATE)
 
 			if (element) {
 				element.innerHTML = ''
