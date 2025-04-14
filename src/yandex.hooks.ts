@@ -27,8 +27,10 @@ export const useYandexCloudVideoPlayer = ({
 	)
 
 	useEffect(() => {
-		setElement(ref.current)
-	}, [ref.current])
+		if (ref.current) {
+			setElement(ref.current)
+		}
+	}, [ref])
 
 	useEffect(() => {
 		if (!ya || !element) return
@@ -48,20 +50,20 @@ export const useYandexCloudVideoPlayer = ({
 
 		const updateState = () => setState(instance.getState())
 
-		instance.on('CurrentTimeChange', updateState)
-		instance.on('DurationChange', updateState)
-		instance.on('MutedChange', updateState)
-		instance.on('VolumeChange', updateState)
-		instance.on('StatusChange', updateState)
+		const events: YandexCloudVideo.PlayerSdkEvents[] = [
+			'CurrentTimeChange',
+			'DurationChange',
+			'MutedChange',
+			'VolumeChange',
+			'StatusChange',
+		]
+
+		events.forEach(event => instance.on(event, updateState))
 
 		updateState()
 
 		return () => {
-			instance.off('CurrentTimeChange', updateState)
-			instance.off('DurationChange', updateState)
-			instance.off('MutedChange', updateState)
-			instance.off('VolumeChange', updateState)
-			instance.on('StatusChange', updateState)
+			events.forEach(event => instance.off(event, updateState))
 
 			setPlayer(null)
 			setState(YANDEX_CLOUD_VIDEO_START_STATE)
