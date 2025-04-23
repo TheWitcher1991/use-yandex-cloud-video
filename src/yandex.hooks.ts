@@ -1,6 +1,17 @@
-import { RefObject, useCallback, useEffect, useState } from 'react'
+import {
+	RefObject,
+	useCallback,
+	useEffect,
+	useState,
+	useRef,
+	CSSProperties,
+} from 'react'
 import { useYandexCloudVideoSdk } from './yandex.context.tsx'
-import { YANDEX_CLOUD_VIDEO_START_STATE } from '~yandex.utils.ts'
+import {
+	YANDEX_CLOUD_VIDEO_ENDPOINT,
+	YANDEX_CLOUD_VIDEO_EVENTS,
+	YANDEX_CLOUD_VIDEO_INIT_STATE,
+} from '~yandex.utils.ts'
 
 export type UseYandexCloudVideoPlayer = YandexCloudVideo.PlayerSdkInitConfig & {
 	ref: RefObject<HTMLDivElement>
@@ -15,184 +26,132 @@ export const useYandexCloudVideoPlayer = ({
 	autoplay,
 	seekRange = 10,
 }: UseYandexCloudVideoPlayer) => {
-	const { ya } = useYandexCloudVideoSdk()
-
-	const [element, setElement] =
-		useState<YandexCloudVideo.Nullable<HTMLDivElement>>(null)
-	const [player, setPlayer] =
-		useState<YandexCloudVideo.Nullable<YandexCloudVideo.PlayerSdkApi>>(null)
+	const { ya, isReady } = useYandexCloudVideoSdk()
 
 	const [state, setState] = useState<YandexCloudVideo.PlayerSdkState>(
-		YANDEX_CLOUD_VIDEO_START_STATE,
+		YANDEX_CLOUD_VIDEO_INIT_STATE,
 	)
+	const [resource, setResource] = useState<string | undefined>(source)
+
+	const playerRef = useRef<YandexCloudVideo.PlayerSdkApi | null>(null)
 
 	useEffect(() => {
-		if (ref.current) {
-			setElement(ref.current)
-		}
-	}, [ref])
+		setResource(source)
+	}, [source])
 
 	useEffect(() => {
-		if (!ya || !element) return
+		if (!isReady || !ya || !resource || !ref.current) return
 
-		const instance = ya.playerSdk.init({
-			element,
-			source,
+		if (playerRef.current) return
+
+		playerRef.current = ya.playerSdk.init({
+			element: ref.current,
+			source: resource,
 			autoplay,
 			muted,
 			volume,
 			hiddenControls,
 		})
 
-		if (!instance) return
+		const updateState = () => setState(playerRef.current?.getState())
 
-		setPlayer(instance)
-
-		const updateState = () => setState(instance.getState())
-
-		const events: YandexCloudVideo.PlayerSdkEvents[] = [
-			'CurrentTimeChange',
-			'DurationChange',
-			'MutedChange',
-			'VolumeChange',
-			'StatusChange',
-		]
-
-		events.forEach(event => instance.on(event, updateState))
+		YANDEX_CLOUD_VIDEO_EVENTS.forEach(event =>
+			playerRef.current?.on(event, updateState),
+		)
 
 		updateState()
 
 		return () => {
-			events.forEach(event => instance.off(event, updateState))
-
-			setPlayer(null)
-			setState(YANDEX_CLOUD_VIDEO_START_STATE)
-
-			if (element) {
-				element.innerHTML = ''
-			}
+			YANDEX_CLOUD_VIDEO_EVENTS.forEach(event =>
+				playerRef.current?.off(event, updateState),
+			)
 		}
-	}, [ya, element, source])
+	}, [ya, resource, isReady, ref.current])
 
-	const play = useCallback(() => {
-		if (player) return player.play()
-	}, [player])
+	const play = useCallback(() => playerRef.current?.play(), [])
 
-	const pause = useCallback(() => {
-		if (player) {
-			player.pause()
-		}
-	}, [player])
+	const pause = useCallback(() => playerRef.current?.pause(), [])
 
 	const playback = useCallback(() => {
-		if (player) {
-			if (player.getState().status === 'play') {
-				player.pause()
-			} else {
-				player.play()
-			}
+		const current = playerRef.current
+		if (current) {
+			const status = current.getState().status
+			status === 'play' ? current.pause() : current.play()
 		}
-	}, [player])
+	}, [])
 
 	const seek = useCallback(
-		(time: YandexCloudVideo.Seconds) => {
-			if (player) {
-				player.seek(time)
-			}
-		},
-		[player],
+		(time: YandexCloudVideo.Seconds) => playerRef.current?.seek(time),
+		[],
 	)
 
 	const forward = useCallback(() => {
-		const newTime = Math.min(
-			state?.currentTime + seekRange,
-			state?.duration ?? 0,
-		)
+		const newTime = Math.min(state.currentTime + seekRange, state.duration)
 		seek(newTime)
-	}, [state?.currentTime, seekRange, state?.duration, seek])
+	}, [state, seekRange, seek])
 
 	const backward = useCallback(() => {
-		const newTime = Math.max(state?.currentTime - seekRange, 0)
+		const newTime = Math.max(state.currentTime - seekRange, 0)
 		seek(newTime)
-	}, [state?.currentTime, seekRange, seek])
+	}, [state, seekRange, seek])
 
-	const setMuted = useCallback(
-		(muted: boolean) => {
-			if (player) {
-				player.setMuted(muted)
-			}
-		},
-		[player],
-	)
+	const setMuted = useCallback((muted: boolean) => {
+		playerRef.current?.setMuted(muted)
+	}, [])
 
 	const toggleMuted = useCallback(() => {
-		if (player) {
-			player.setMuted(!state?.muted)
-		}
-	}, [state?.muted, player])
+		playerRef.current?.setMuted(!state.muted)
+	}, [state.muted])
 
-	const setVolume = useCallback(
-		(volume: YandexCloudVideo.Volume) => {
-			if (player) {
-				player.setVolume(volume)
-			}
-		},
-		[player],
-	)
+	const setVolume = useCallback((volume: number) => {
+		playerRef.current?.setVolume(volume)
+	}, [])
 
-	const setSource = useCallback(
-		(sourceConfig: YandexCloudVideo.PlayerSdkSourceConfig) => {
-			if (player) return player.setSource(sourceConfig)
-		},
-		[player],
-	)
+	const setSource = useCallback((sourceConfig: string) => {
+		playerRef.current?.setSource(
+			`${YANDEX_CLOUD_VIDEO_ENDPOINT}/${sourceConfig}`,
+		)
+	}, [])
+
+	const setVideoStyle = useCallback((css: CSSProperties) => {
+		playerRef.current['store']['playerApi']['setVideoStyle'](css)
+	}, [])
+
+	const getState = useCallback(() => playerRef.current?.getState(), [])
+
+	const destroy = useCallback(() => {
+		setResource(undefined)
+		playerRef.current?.destroy()
+		playerRef.current = null
+		setState(YANDEX_CLOUD_VIDEO_INIT_STATE)
+	}, [])
 
 	const off = useCallback(
 		(
 			eventName: YandexCloudVideo.PlayerSdkEvents,
 			callback: YandexCloudVideo.PlayerSdkEventHandlers[YandexCloudVideo.PlayerSdkEvents],
-		) => {
-			if (player) {
-				player.off(eventName, callback)
-			}
-		},
-		[player],
+		) => playerRef.current?.on(eventName, callback),
+		[],
 	)
 
 	const on = useCallback(
 		(
 			eventName: YandexCloudVideo.PlayerSdkEvents,
 			callback: YandexCloudVideo.PlayerSdkEventHandlers[YandexCloudVideo.PlayerSdkEvents],
-		) => {
-			if (player) {
-				player.on(eventName, callback)
-			}
-		},
-		[player],
+		) => playerRef.current?.off(eventName, callback),
+		[],
 	)
 
 	const once = useCallback(
 		(
 			eventName: YandexCloudVideo.PlayerSdkEvents,
 			callback: YandexCloudVideo.PlayerSdkEventHandlers[YandexCloudVideo.PlayerSdkEvents],
-		) => {
-			if (player) {
-				player.once(eventName, callback)
-			}
-		},
-		[player],
+		) => playerRef.current?.once(eventName, callback),
+		[],
 	)
 
-	const destroy = useCallback(() => {
-		if (player) return player.destroy()
-	}, [player])
-
-	const getState = useCallback(() => {
-		if (player) return player.getState()
-	}, [player])
-
 	return {
-		player,
+		player: playerRef.current,
 		play,
 		pause,
 		playback,
